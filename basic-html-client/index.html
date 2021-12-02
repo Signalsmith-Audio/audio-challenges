@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>(loading audio challenge)</title>
+		<meta charset="UTF-8">
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<table id="main-table">
+			<tr>
+				<td colspan="2" id="header">header</td>
+			</tr>
+			<tr>
+				<td id="source"><span id="source-prefix">Input: </span><a id="source-link"><code id="source-filename"></code></a></td>
+			</tr>
+			<tr>
+				<td id="description">description</td>
+				<td id="feedback"></td>
+			</tr>
+			<tr>
+				<th>Source</td>
+				<th>Result</td>
+			</tr>
+			<tr>
+				<td id="audio-display-source"></td>
+				<td id="audio-display-result">
+					<div id="audio-drop-prompt">Drop your <code>.wav</code> output here</div>
+				</td>
+			</tr>
+		</table>
+	
+		<script src="../challenge.js"></script>
+		<script src="drop-audio.js"></script>
+		<script>
+			var query = {}, queryString = location.href.replace(/#.*/, '').replace(/^[^?]*\??/, '');
+			queryString.split("&").forEach(pair => {
+				if (!pair) return;
+				let parts = pair.split("=");
+				let key = decodeURIComponent(parts.shift()), value = decodeURIComponent(parts.join("="));
+				query[key] = value;
+			});
+
+			// Define how to display a challenge
+			Challenge.register = (challenge) => {
+				let $ = document.querySelector.bind(document);
+				let $$ = document.querySelectorAll.bind(document);
+				
+				document.title = challenge.title + " - Audio Challenges";
+				$('#header').textContent = challenge.title;
+				let audioSrc = "../audio-sources/" + challenge.source + ".wav";
+				$('#source-link').href = audioSrc;
+				$('#source-filename').textContent = challenge.source + ".wav";
+				$('#description').innerHTML = challenge.descriptionHtml;
+
+				let scopeStart, scopeLength;
+				if (typeof challenge.scope == 'number') {
+					scopeStart = 0;
+					scopeLength = challenge.scope;
+				} else if (Array.isArray(challenge.scope)) {
+					scopeStart = challenge.scope[0];
+					scopeLength = challenge.scope[1] - challenge.scope[0];
+				} else {
+					// Whole waveform
+					scopeStart = 0;
+					scopeLength = 0.15;
+				}
+				
+				var drawPending = false;
+				var sourceDisplay, resultDisplay;
+				function makeAudioDisplay(node, sourceObj) {
+					node.innerHTML = '';
+					node.classList.add('audio-display');
+					let obj = {source: sourceObj};
+					
+					let audio = document.createElement('audio');
+					audio.controls = true;
+					audio.src = sourceObj.url;
+					node.appendChild(audio);
+					
+					let scope = document.createElement('canvas');
+					scope.width = 640;
+					scope.height = 480;
+					node.appendChild(scope);
+					obj.drawScope = (time) => {
+						let startIndex = Math.round((time - scopeLength*0.5)*sourceObj.sampleRate);
+						let lengthIndex = Math.round(scopeLength*sourceObj.sampleRate);
+						
+						scope.width = scope.width; // clears the canvas
+						function valueToY(v) {
+							return scope.height*(0.5 - v*0.5);
+						}
+
+						let context = scope.getContext('2d');
+						context.fillStyle = "#222";
+						context.fillRect(0, 0, scope.width, scope.height);
+						sourceObj.channels.forEach((channel, channelIndex) => {
+							context.fillStyle = ["#28D", "#D82"][channelIndex%2];
+							context.lineWidth = 1;
+							for (let x = 0; x < scope.width; ++x) {
+								let lowIndex = Math.floor(startIndex + (x/scope.width)*lengthIndex);
+								let highIndex = Math.ceil(startIndex + ((x + 1)/scope.width)*lengthIndex);
+								lowIndex = Math.max(Math.min(lowIndex, channel.length - 1), 0);
+								highIndex = Math.max(Math.min(highIndex, channel.length), 1);
+								let min = channel[lowIndex], max = min;
+								for (let i = lowIndex; i < highIndex; ++i) {
+									min = Math.min(channel[i], min);
+									max = Math.max(channel[i], max);
+								}
+								context.fillRect(x, valueToY(max), 1, valueToY(min) - valueToY(max) + 1);
+							}
+						});
+						
+						context.font = "14px Arial";
+						context.fillStyle = "#FFF";
+						context.strokeStyle = "#FFF";
+						context.lineWidth = 2;
+						function displayTime(t) {
+							return t.toLocaleString(undefined, {minimumFractionDigits: 3, maximumFractionDigits: 3});
+						}
+						context.textAlign = "left";
+						context.fillText("t = " + displayTime(time), scope.width*0.5 + 4, scope.height - 12);
+						context.beginPath();
+						context.lineTo(scope.width*0.5, 4);
+						context.lineTo(scope.width*0.5, scope.height - 4);
+						context.stroke();
+					};
+					
+					obj.drawScope(scopeStart);
+					function drawFrame() {
+						if (sourceDisplay) sourceDisplay.drawScope(audio.currentTime);
+						if (resultDisplay) resultDisplay.drawScope(audio.currentTime);
+						if (!audio.paused && !drawPending) {
+							drawPending = true;
+							requestAnimationFrame(() => {
+								drawPending = false;
+								drawFrame(audio.currentTime);
+							});
+						}
+					};
+					audio.ontimeupdate = drawFrame;
+					audio.onplay = () => {
+						$$('audio').forEach(other => {
+							if (audio != other) {
+								other.pause();
+							}
+						});
+						drawFrame();
+					};
+					scope.onclick = () => {
+						if (audio.paused) {
+							if (audio.currentTime > audio.duration*0.95) {
+								audio.currentTime = 0;
+							}
+							audio.play();
+						} else {
+							audio.pause();
+						};
+					};
+					
+					return obj;
+				}
+				
+				function testTarget() {
+					if (sourceDisplay && resultDisplay) {
+						let testResult;
+						if (sourceDisplay.source.sampleRate != resultDisplay.source.sampleRate) {
+							testResult = "sample-rates don't match - make sure you export at " + sourceDisplay.source.sampleRate + "Hz";
+						} else if (challenge.testWaveform) {
+							testResult = challenge.testWaveform(source, sourceDisplay.source.channels, resultDisplay.source.channels);
+						} else {
+							testResult = "challenge.testWaveform() is not defined";
+						}
+						let feedback = $('#feedback');
+						feedback.classList.remove("passed");
+						if (typeof testResult == "string") {
+							feedback.textContent = testResult;
+						} else if (typeof testResult == "undefined") {
+							feedback.classList.add("passed");
+							feedback.textContent = "Passed! 🥳";
+						} else {
+							feedback.textContent = "Result doesn't quite match what we expected";
+						}
+					}
+				}
+				
+				fetchAudio(audioSrc).then(sourceObj => {
+					sourceDisplay = makeAudioDisplay($('#audio-display-source'), sourceObj);
+					testTarget();
+				}).catch(e => {
+					console.error(e);
+					$('#audio-display-source').textContent = e.message;
+				});
+				
+				createDropZone($('body'), 'drop-hover', (error, audioObj) => {
+					if (error) {
+						console.log(error);
+						$('#audio-display-result').textContent = error.message;
+						return;
+					}
+
+					resultDisplay = makeAudioDisplay($('#audio-display-result'), audioObj);
+					testTarget();
+				});
+			};
+
+			if (query.id) {
+				// load it as a <script>
+				let script = document.createElement('script');
+				script.src = "../challenges/" + query.id + ".js";
+				script.onerror = (e) => {
+					document.body.innerHTML = "Error loading challenge";
+					console.error(e);
+				};
+				document.head.appendChild(script);
+			} else {
+				document.body.innerHTML = "Missing challenge ID";
+			}
+		</script>
+	</body>
+</html>
