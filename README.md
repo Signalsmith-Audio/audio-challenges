@@ -40,3 +40,7 @@ The current client (in `basic-html-client/`) is functional but not that pretty. 
 This is currently a Signalsmith Audio project, but we would love it to be collaborative.
 
 This kind of teaching resource works best if tightly curated (i.e. not a wiki), but if we get a few other people committed to this, we can move this to its own GitHub organisation.
+
+## License
+
+This code (including the challenges) are released under the [MIT license](https://choosealicense.com/licenses/mit/).
