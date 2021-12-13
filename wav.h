@@ -88,9 +88,20 @@ public:
 	enum class Format {
 		INT16LE=1
 	};
-	bool formatIsValid(uint16_t value) {
+	bool formatIsValid(uint16_t value) const {
 		if (value == (uint16_t)Format::INT16LE) return true;
 		return false;
+	}
+	
+	int length() const {
+		return samples.size()/channels;
+	}
+	
+	double & at(int c, int i) {
+		return samples[i*channels + c];
+	}
+	double at(int c, int i) const {
+		return samples[i*channels + c];
 	}
 	
 	Result read(std::string filename) {
@@ -103,7 +114,9 @@ public:
 		read32(file); // File length - we don't check this
 		if (read32(file) != value_WAVE) return result = Result(Result::Code::FORMAT_ERROR, "Input is not a plain WAVE file");
 		
-		Format format = Format::INT16LE; // Shouldn't matter, we should always get a "fmt " chunk before data
+		auto blockStart = file.tellg();
+		
+		Format format = Format::INT16LE;
 		while (!file.eof()) {
 			auto blockType = read32(file), blockLength = read32(file);
 			if (blockType == value_fmt) {
@@ -122,7 +135,16 @@ public:
 				// Since it's plain WAVE, we can do some extra checks for consistency
 				if (bitsPerSample*channels != bytesPerFrame*8) return result = Result(Result::Code::FORMAT_ERROR, "Format sizes don't add up");
 				if (expectedBytesPerSecond != sampleRate*bytesPerFrame) return result = Result(Result::Code::FORMAT_ERROR, "Format sizes don't add up");
-			} else if (blockType == value_data) {
+			} else {
+				file.ignore(blockLength);
+			}
+		}
+		
+		file.clear();
+		file.seekg(blockStart);
+		while (!file.eof()) {
+			auto blockType = read32(file), blockLength = read32(file);
+			if (blockType == value_data) {
 				std::vector<double> samples(0);
 				switch (format) {
 				case Format::INT16LE:
