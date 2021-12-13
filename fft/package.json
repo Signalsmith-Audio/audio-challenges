@@ -1,0 +1,16 @@
+{
+  "name": "signalsmith-js-fft",
+  "version": "1.0.1",
+  "description": "A simple browser-compatible FFT implementation, with real-valued FFT support",
+  "main": "fft.js",
+  "scripts": {
+    "test": "node test"
+  },
+  "keywords": [
+    "FFT",
+    "DSP",
+    "audio"
+  ],
+  "author": "Geraint Luff (Signalsmith Audio)",
+  "license": "MIT"
+}

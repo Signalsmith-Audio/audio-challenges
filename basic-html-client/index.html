@@ -30,6 +30,8 @@
 		</table>
 	
 		<script src="../challenge.js"></script>
+		<script src="../fft/fft.js"></script>
+		<script src="../stft.js"></script>
 		<script src="drop-audio.js"></script>
 		<script>
 			var query = {}, queryString = location.href.replace(/#.*/, '').replace(/^[^?]*\??/, '');
@@ -78,23 +80,37 @@
 					node.appendChild(audio);
 					
 					let scope = document.createElement('canvas');
-					scope.width = 640;
-					scope.height = 480;
+					let freqAnalyser = document.createElement('canvas');
+					scope.width = freqAnalyser.width = 640;
+					scope.height = freqAnalyser.height = 480;
 					node.appendChild(scope);
+					node.appendChild(freqAnalyser);
 					obj.drawScope = (time) => {
 						let startIndex = Math.round((time - scopeLength*0.5)*sourceObj.sampleRate);
 						let lengthIndex = Math.round(scopeLength*sourceObj.sampleRate);
 						
 						scope.width = scope.width; // clears the canvas
-						function valueToY(v) {
+						freqAnalyser.width = freqAnalyser.width;
+						function waveToY(v) {
 							return scope.height*(0.5 - v*0.5);
 						}
+						function energyToY(e) {
+							e *= 4;
+							let offset = 0.0000000001
+							return freqAnalyser.height*(1 - Math.pow(e, 0.15));
+							return freqAnalyser.height*(1 - (Math.log(e+offset) - Math.log(offset))/-Math.log(offset));
+						}
+						function hzToX(f) {
+							let sampleRate = sourceObj.sampleRate;
+							return freqAnalyser.width*(Math.log(f + 20) - Math.log(20))/(Math.log(sampleRate*0.5 + 20) - Math.log(20));
+						}
 
+						// Draw the scope
 						let context = scope.getContext('2d');
 						context.fillStyle = "#222";
 						context.fillRect(0, 0, scope.width, scope.height);
 						sourceObj.channels.forEach((channel, channelIndex) => {
-							context.fillStyle = ["#28D", "#D82"][channelIndex%2];
+							context.fillStyle = ["#28D", "#D82", "#D42", "#2D2"][channelIndex%4];
 							context.lineWidth = 1;
 							for (let x = 0; x < scope.width; ++x) {
 								let lowIndex = Math.floor(startIndex + (x/scope.width)*lengthIndex);
@@ -106,7 +122,7 @@
 									min = Math.min(channel[i], min);
 									max = Math.max(channel[i], max);
 								}
-								context.fillRect(x, valueToY(max), 1, valueToY(min) - valueToY(max) + 1);
+								context.fillRect(x, waveToY(max), 1, waveToY(min) - waveToY(max) + 1);
 							}
 						});
 						
@@ -123,6 +139,29 @@
 						context.lineTo(scope.width*0.5, 4);
 						context.lineTo(scope.width*0.5, scope.height - 4);
 						context.stroke();
+
+						// draw spectrum
+						context = freqAnalyser.getContext('2d');
+						context.fillStyle = "#222";
+						context.fillRect(0, 0, freqAnalyser.width, freqAnalyser.height);
+						sourceObj.stft.channels.forEach((channel, channelIndex) => {
+							let spectrumIndex = 0;
+							while (spectrumIndex < channel.length - 1 && time > sourceObj.stft.times[spectrumIndex]) {
+								spectrumIndex++;
+							}
+							let spectrum = channel[spectrumIndex];
+
+							context.strokeStyle = ["#28D", "#D82", "#D42", "#2D2"][channelIndex%4];
+							context.lineWidth = 2;
+							context.beginPath();
+							for (let fi = 0; fi < sourceObj.stft.freqs.length; ++fi) {
+								let freq = sourceObj.stft.freqs[fi];
+								let binR = spectrum[2*fi], binI = spectrum[2*fi + 1];
+								let binEnergy = binR*binR + binI*binI;
+								context.lineTo(hzToX(freq), energyToY(binEnergy));
+							}
+							context.stroke();
+						});
 					};
 					
 					obj.drawScope(scopeStart);
@@ -182,8 +221,11 @@
 						}
 					}
 				}
-				
+
 				fetchAudio(audioSrc).then(sourceObj => {
+					let stft = new Stft(sourceObj.sampleRate, challenge.fftPeriod);
+					sourceObj.stft = stft.analyse(sourceObj.channels);
+					console.log(sourceObj.stft);
 					sourceDisplay = makeAudioDisplay($('#audio-display-source'), sourceObj);
 					testTarget();
 				}).catch(e => {
@@ -197,6 +239,9 @@
 						$('#audio-display-result').textContent = error.message;
 						return;
 					}
+
+					let stft = new Stft(audioObj.sampleRate, challenge.fftPeriod);
+					audioObj.stft = stft.analyse(audioObj.channels);
 
 					resultDisplay = makeAudioDisplay($('#audio-display-result'), audioObj);
 					testTarget();
