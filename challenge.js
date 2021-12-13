@@ -14,6 +14,13 @@ Challenge.prototype = {
 		if (input.length != output.length) return "Result has " + output.length + " channels instead of " + input.length;
 
 		return null; // returning null means the challenge is accepted
+	},
+	testSpectrum: (sampleRate, times, freqs, input, output) => {
+		// times and freqs are lists of the STFT times and bin frequencies
+		// input and output are lists containing lists of spectra, with interleaved complex values
+		var channel = 0, timeIndex = 0, freqIndex = 5;
+		var binReal = input[channel][timeIndex][freqIndex*2];
+		var binImag = input[channel][timeIndex][freqIndex*2 + 1];
 	}
 };
 

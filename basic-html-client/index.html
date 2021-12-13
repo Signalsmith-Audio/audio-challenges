@@ -11,7 +11,7 @@
 				<td colspan="2" id="header">header</td>
 			</tr>
 			<tr>
-				<td id="source"><span id="source-prefix">Input: </span><a id="source-link"><code id="source-filename"></code></a></td>
+				<td id="source"><span id="source-prefix">Input: </span><a id="source-link" download><code id="source-filename"></code></a></td>
 			</tr>
 			<tr>
 				<td id="description">description</td>
@@ -85,12 +85,12 @@
 					scope.height = freqAnalyser.height = 480;
 					node.appendChild(scope);
 					node.appendChild(freqAnalyser);
+					let lastDrawnSpectrumIndex = -1;
 					obj.drawScope = (time) => {
 						let startIndex = Math.round((time - scopeLength*0.5)*sourceObj.sampleRate);
 						let lengthIndex = Math.round(scopeLength*sourceObj.sampleRate);
 						
 						scope.width = scope.width; // clears the canvas
-						freqAnalyser.width = freqAnalyser.width;
 						function waveToY(v) {
 							return scope.height*(0.5 - v*0.5);
 						}
@@ -101,8 +101,9 @@
 							return freqAnalyser.height*(1 - (Math.log(e+offset) - Math.log(offset))/-Math.log(offset));
 						}
 						function hzToX(f) {
+							let offset = 50;
 							let sampleRate = sourceObj.sampleRate;
-							return freqAnalyser.width*(Math.log(f + 20) - Math.log(20))/(Math.log(sampleRate*0.5 + 20) - Math.log(20));
+							return freqAnalyser.width*(Math.log(f + offset) - Math.log(offset))/(Math.log(sampleRate*0.5 + offset) - Math.log(offset));
 						}
 
 						// Draw the scope
@@ -141,27 +142,31 @@
 						context.stroke();
 
 						// draw spectrum
-						context = freqAnalyser.getContext('2d');
-						context.fillStyle = "#222";
-						context.fillRect(0, 0, freqAnalyser.width, freqAnalyser.height);
-						sourceObj.stft.channels.forEach((channel, channelIndex) => {
-							let spectrumIndex = 0;
-							while (spectrumIndex < channel.length - 1 && time > sourceObj.stft.times[spectrumIndex]) {
-								spectrumIndex++;
-							}
-							let spectrum = channel[spectrumIndex];
+						let spectrumIndex = 0;
+						while (spectrumIndex < sourceObj.stft.times.length - 1 && time > sourceObj.stft.times[spectrumIndex]) {
+							spectrumIndex++;
+						}
+						if (spectrumIndex != lastDrawnSpectrumIndex) {
+							freqAnalyser.width = freqAnalyser.width;
+							lastDrawnSpectrumIndex = spectrumIndex;
+							context = freqAnalyser.getContext('2d');
+							context.fillStyle = "#222";
+							context.fillRect(0, 0, freqAnalyser.width, freqAnalyser.height);
+							sourceObj.stft.channels.forEach((channel, channelIndex) => {
+								let spectrum = channel[spectrumIndex];
 
-							context.strokeStyle = ["#28D", "#D82", "#D42", "#2D2"][channelIndex%4];
-							context.lineWidth = 2;
-							context.beginPath();
-							for (let fi = 0; fi < sourceObj.stft.freqs.length; ++fi) {
-								let freq = sourceObj.stft.freqs[fi];
-								let binR = spectrum[2*fi], binI = spectrum[2*fi + 1];
-								let binEnergy = binR*binR + binI*binI;
-								context.lineTo(hzToX(freq), energyToY(binEnergy));
-							}
-							context.stroke();
-						});
+								context.strokeStyle = ["#28D", "#D82", "#D42", "#2D2"][channelIndex%4];
+								context.lineWidth = 2;
+								context.beginPath();
+								for (let fi = 0; fi < sourceObj.stft.freqs.length; ++fi) {
+									let freq = sourceObj.stft.freqs[fi];
+									let binR = spectrum[2*fi], binI = spectrum[2*fi + 1];
+									let binEnergy = binR*binR + binI*binI;
+									context.lineTo(hzToX(freq), energyToY(binEnergy));
+								}
+								context.stroke();
+							});
+						}
 					};
 					
 					obj.drawScope(scopeStart);
@@ -201,23 +206,24 @@
 				
 				function testTarget() {
 					if (sourceDisplay && resultDisplay) {
-						let testResult;
+						let testError;
 						if (sourceDisplay.source.sampleRate != resultDisplay.source.sampleRate) {
-							testResult = "sample-rates don't match - make sure you export at " + sourceDisplay.source.sampleRate + "Hz";
-						} else if (challenge.testWaveform) {
-							testResult = challenge.testWaveform(source, sourceDisplay.source.channels, resultDisplay.source.channels);
-						} else {
-							testResult = "challenge.testWaveform() is not defined";
+							testError = "sample-rates don't match";
 						}
+						testError = testError || challenge.testWaveform(sourceDisplay.source.sampleRate, sourceDisplay.source.channels, resultDisplay.source.channels);
+						testError = testError || challenge.testSpectrum(sourceDisplay.source.sampleRate, sourceDisplay.source.stft.times, sourceDisplay.source.stft.freqs, sourceDisplay.source.stft.channels, resultDisplay.source.stft.channels);
+
 						let feedback = $('#feedback');
 						feedback.classList.remove("passed");
-						if (typeof testResult == "string") {
-							feedback.textContent = testResult;
-						} else if (typeof testResult == "undefined") {
+						if (testError) {
+							if (typeof testError == "string") {
+								feedback.textContent = testError;
+							} else {
+								feedback.textContent = "Result doesn't quite match what we expected";
+							}
+						} else {
 							feedback.classList.add("passed");
 							feedback.textContent = "Passed! 🥳";
-						} else {
-							feedback.textContent = "Result doesn't quite match what we expected";
 						}
 					}
 				}
@@ -225,7 +231,6 @@
 				fetchAudio(audioSrc).then(sourceObj => {
 					let stft = new Stft(sourceObj.sampleRate, challenge.fftPeriod);
 					sourceObj.stft = stft.analyse(sourceObj.channels);
-					console.log(sourceObj.stft);
 					sourceDisplay = makeAudioDisplay($('#audio-display-source'), sourceObj);
 					testTarget();
 				}).catch(e => {

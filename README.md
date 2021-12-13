@@ -35,7 +35,7 @@ We'd love there to be some easy get-started kits in a few different languages, f
 
 The current client (in `basic-html-client/`) is functional but not that pretty.  The challenges are (hopefully) written in a fairly neutral way to enable you to write a shinier and more fun client.
 
-### Planning and leadership
+### Content and planning
 
 This is currently a Signalsmith Audio project, but we would love it to be collaborative.
 

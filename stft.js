@@ -3,7 +3,6 @@ function Stft(sampleRate, fftPeriod) {
 	let windowSize = Math.round(fftPeriod*sampleRate);
 	let fftSize = 2;
 	while (fftSize < windowSize) fftSize *= 2;
-	console.log(windowSize, fftSize);
 
 	let fft = new RFFT(fftSize);
 

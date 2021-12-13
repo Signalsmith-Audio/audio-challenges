@@ -1,6 +1,7 @@
 {
 	"format": "v1",
 	"challenges": [
-		{"key": "v1/fixed-gain", "description": "Multiply everything by a constant"}
+		{"key": "v1/fixed-gain", "description": "Multiply everything by a constant"},
+		{"key": "v1/lowpass", "description": "Lowpass all the channels"}
 	]
 }
