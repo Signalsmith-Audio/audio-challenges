@@ -37,9 +37,7 @@ The current client (in `basic-html-client/`) is functional but not that pretty. 
 
 ### Content and planning
 
-This is currently a Signalsmith Audio project, but we would love it to be collaborative.
-
-This kind of teaching resource works best if tightly curated (i.e. not a wiki), but if we get a few other people committed to this, we can move this to its own GitHub organisation.
+This is currently a Signalsmith Audio project, but we would love it to be collaborative.  If we get a few other people committed to this, we can move this to its own GitHub organisation.
 
 ## License
 

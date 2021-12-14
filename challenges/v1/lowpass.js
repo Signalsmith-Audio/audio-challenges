@@ -3,7 +3,7 @@ challenge.source = "synth-chord";
 challenge.scope = 0.5;
 challenge.fftPeriod = 0.1;
 challenge.descriptionHtml = `
-	<p>Apply a 2nd-order Butterword lowpass at 1kHz</p>
+	<p>Apply a 2nd-order Butterworth lowpass at 1kHz</p>
 `;
 challenge.testSpectrum = (sampleRate, times, freqs, inputs, outputs) => {
 	if (inputs.length != outputs.length) return "channel counts don't match";
